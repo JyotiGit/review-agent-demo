@@ -1,0 +1,31 @@
+name: AI Review - sync reactions
+
+on:
+  schedule:
+    - cron: "17 * * * *"    # hourly; GitHub doesn't fire events for reactions
+  workflow_dispatch: {}     # "Run workflow" button for demos
+
+permissions:
+  contents: write
+
+concurrency:
+  group: review-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Sync reactions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m review_agent.sync
