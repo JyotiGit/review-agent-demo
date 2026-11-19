@@ -1,1 +1,1 @@
-"""AI code review agent prototype."""
+"""AI pull request review agent."""
