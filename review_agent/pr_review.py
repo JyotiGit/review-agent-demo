@@ -1,4 +1,4 @@
-"""Entry point: review a pull request and post the feedback on it.
+"""Entry point: review a pull request and post inline comments on the changed lines.
 
 In GitHub Actions it reads the pull_request event automatically:
     python -m review_agent.pr_review
@@ -13,10 +13,11 @@ import json
 import os
 import sys
 
+import requests
+
+from .comments import inline_comment_body, summary_body
 from .github_client import GitHubClient
 from .reviewer import review_changes
-
-HEADER = "## 🤖 AI Code Review"
 
 
 def load_event() -> dict:
@@ -61,20 +62,30 @@ def main() -> int:
         return 0
 
     head_sha = pr["head"]["sha"]
-    body = f"{HEADER}\n\n{review}\n\n---\n<sub>Reviewed commit `{head_sha[:7]}`</sub>"
+    body = summary_body(review, head_sha)
+    inline = [{"path": f.path, "line": f.line, "side": "RIGHT", "body": inline_comment_body(f)}
+              for f in review.findings]
 
-    # Show the review on the Actions run page too
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a", encoding="utf-8") as fh:
-            fh.write(body + "\n")
+            fh.write(body + "\n\n" + "\n\n".join(f"**{c['path']}:{c['line']}**\n\n{c['body']}" for c in inline))
 
     if args.dry_run:
         print(body)
+        for c in inline:
+            print(f"\n--- {c['path']}:{c['line']}\n{c['body']}")
         return 0
 
-    result = gh.post_pr_review(number, head_sha, body)
-    print(f"Review posted: {result.get('html_url')}")
+    try:
+        result = gh.post_pr_review(number, head_sha, body, inline)
+    except requests.HTTPError as exc:
+        # If GitHub rejects a line position, still deliver every finding in the summary.
+        print(f"::warning::Inline comments rejected ({exc}); posting all findings in the summary instead.")
+        review.unplaced = review.findings + review.unplaced
+        review.findings = []
+        result = gh.post_pr_review(number, head_sha, summary_body(review, head_sha), [])
+    print(f"Review posted with {len(inline)} inline comment(s): {result.get('html_url')}")
     return 0
 
 

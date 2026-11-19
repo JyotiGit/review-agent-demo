@@ -1,0 +1,32 @@
+name: AI PR Review - accept / reject
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write      # mark the AI comment as accepted / rejected
+
+jobs:
+  decide:
+    # Only replies (not new threads), written by people, that start with /accept or /reject
+    if: >-
+      github.event.comment.in_reply_to_id &&
+      github.event.comment.user.type != 'Bot' &&
+      (startsWith(github.event.comment.body, '/accept') || startsWith(github.event.comment.body, '/reject'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Record decision
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m review_agent.pr_feedback

@@ -62,9 +62,23 @@ class GitHubClient:
             for f in self.paginate(f"/repos/{self.repo}/pulls/{number}/files")
         ]
 
-    def post_pr_review(self, number: int, commit_sha: str, body: str) -> dict:
-        """Posts the review as a PR review comment (shown in the PR's Conversation tab)."""
+    def post_pr_review(self, number: int, commit_sha: str, body: str, comments: list[dict]) -> dict:
+        """Posts one PR review: a summary plus inline comments on specific lines."""
         r = self.request("POST", f"/repos/{self.repo}/pulls/{number}/reviews",
-                         json={"commit_id": commit_sha, "body": body, "event": "COMMENT"})
+                         json={"commit_id": commit_sha, "body": body, "event": "COMMENT", "comments": comments})
         r.raise_for_status()
         return r.json()
+
+    # ---- inline review comments (accept / reject) -------------------------
+    def get_review_comment(self, comment_id: int) -> dict:
+        return self.get(f"/repos/{self.repo}/pulls/comments/{comment_id}")
+
+    def update_review_comment(self, comment_id: int, body: str) -> dict:
+        r = self.request("PATCH", f"/repos/{self.repo}/pulls/comments/{comment_id}", json={"body": body})
+        r.raise_for_status()
+        return r.json()
+
+    def add_review_comment_reaction(self, comment_id: int, content: str) -> None:
+        r = self.request("POST", f"/repos/{self.repo}/pulls/comments/{comment_id}/reactions",
+                         json={"content": content})
+        r.raise_for_status()
