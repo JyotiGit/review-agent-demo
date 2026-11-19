@@ -5,7 +5,7 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write           # store the decision on the review-feedback branch
   pull-requests: write      # mark the AI comment as accepted / rejected
 
 jobs:

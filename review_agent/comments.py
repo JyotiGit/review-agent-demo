@@ -60,6 +60,30 @@ def parse_decision(body: str) -> tuple[str, str] | None:
     return ("accepted" if m.group(1).lower() == "accept" else "rejected"), m.group(2).strip()[:200]
 
 
+def parse_ai_comment(body: str) -> dict:
+    """Read severity, category, text and decision back out of an AI comment (for reporting)."""
+    sev = re.search(r"\*\*(High|Medium|Low)\*\*", body or "")
+    cat = re.search(r"·\s*`(\w+)`", body or "")
+    main = (body or "").split(f"\n\n{DECISION_MARKER}")[0]
+    text_lines = []
+    for line in main.splitlines()[2:]:  # skip the marker and the severity line
+        if line.startswith("**Suggestion:**") or line.startswith("<sub>"):
+            break
+        if line.strip():
+            text_lines.append(line.strip())
+    decision = {"decision": "pending", "decided_by": "", "reason": ""}
+    if DECISION_MARKER in (body or ""):
+        m = re.search(r"(Accepted|Rejected)\*\* by @(\S+)(?: — (.*))?", body.split(DECISION_MARKER, 1)[1])
+        if m:
+            decision = {"decision": m.group(1).lower(), "decided_by": m.group(2), "reason": (m.group(3) or "").strip()}
+    return {
+        "severity": sev.group(1).lower() if sev else "",
+        "category": cat.group(1) if cat else "",
+        "comment": " ".join(text_lines),
+        **decision,
+    }
+
+
 def with_decision(body: str, decision: str, user: str, reason: str) -> str:
     """Add (or replace) the decision line at the bottom of an AI comment."""
     base = body.split(f"\n\n{DECISION_MARKER}")[0]

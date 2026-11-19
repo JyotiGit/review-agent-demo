@@ -8,9 +8,10 @@ from __future__ import annotations
 import os
 import sys
 
-from .comments import COMMENT_MARKER, parse_decision, with_decision
+from .comments import COMMENT_MARKER, parse_ai_comment, parse_decision, with_decision
 from .github_client import GitHubClient
 from .pr_review import load_event
+from .store import FeedbackStore
 
 
 def main() -> int:
@@ -39,6 +40,36 @@ def main() -> int:
     gh.update_review_comment(parent_id, with_decision(parent["body"], action, user, reason))
     gh.add_review_comment_reaction(reply["id"], "+1")
     print(f"@{user} {action} comment {parent_id}" + (f": {reason}" if reason else ""))
+
+    # Store a permanent record of the decision.
+    pr = event.get("pull_request") or {}
+    ai = parse_ai_comment(parent["body"])  # severity, category and text of the AI comment
+    record = {
+        "pr_number": pr.get("number"),
+        "pr_title": pr.get("title"),
+        "pr_author": (pr.get("user") or {}).get("login"),
+        "comment_id": parent_id,
+        "comment_url": parent.get("html_url"),
+        "commit_sha": parent.get("commit_id"),
+        "file": parent.get("path"),
+        "line": parent.get("line") or parent.get("original_line"),
+        "severity": ai["severity"],
+        "category": ai["category"],
+        "comment": ai["comment"],
+        "comment_created_at": parent.get("created_at"),
+        "decision": action,
+        "decided_by": user,
+        "reason": reason,
+        "decided_at": reply.get("created_at"),
+        "reply_id": reply["id"],
+        "reply_url": reply.get("html_url"),
+    }
+    try:
+        path = FeedbackStore(gh).save(record)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::error::Decision shown on the PR but could not be stored: {exc}")
+        return 1
+    print(f"Stored on branch '{FeedbackStore(gh).branch}': {path}")
     return 0
 
 

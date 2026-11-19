@@ -69,6 +69,15 @@ class GitHubClient:
         r.raise_for_status()
         return r.json()
 
+    # ---- reporting ---------------------------------------------------------
+    def list_pulls(self) -> Iterator[dict]:
+        """Every PR in the repo, open and closed."""
+        return self.paginate(f"/repos/{self.repo}/pulls?state=all")
+
+    def list_all_review_comments(self) -> Iterator[dict]:
+        """Every inline review comment on every PR (includes reaction counts)."""
+        return self.paginate(f"/repos/{self.repo}/pulls/comments")
+
     # ---- inline review comments (accept / reject) -------------------------
     def get_review_comment(self, comment_id: int) -> dict:
         return self.get(f"/repos/{self.repo}/pulls/comments/{comment_id}")
